@@ -3,74 +3,154 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Crossword Player</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Crossword Host Board</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
+  <!-- Container chứa mã QR nhỏ -->
+  <div id="qr-container" style="position: absolute; top: 20px; left: 20px; cursor: pointer; text-align: center; z-index: 100;" onclick="document.getElementById('qr-modal').style.display='flex'">
+    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 5px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">Quét để tham gia</p>
+    <img id="qr-thumbnail" src="" style="width: 100px; height: 100px; border-radius: 8px; border: 2px solid var(--accent-cyan); box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3); transition: transform 0.2s;" alt="QR Code">
+  </div>
 
-  <div class="client-container animate-fade-in" id="login-view">
-    <div class="client-header">
-      <h1>Workshop NCKH</h1>
-      <p style="color: var(--text-secondary)">Sẵn sàng giải mã từ khóa?</p>
-    </div>
-    
-    <div class="glass-panel" style="width: 100%; padding: 30px;">
-      <h2 style="margin-bottom: 20px; text-align: center;">Đăng ký người chơi</h2>
-      <input type="text" id="player-name" class="input-field" placeholder="Nhập tên/nickname của bạn..." style="margin-bottom: 20px;">
-      <button class="btn-primary" id="btn-join" style="width: 100%;">Tham gia Game</button>
+  <!-- Modal chứa mã QR phóng to -->
+  <div id="qr-modal" class="modal-overlay" style="display: none; z-index: 3000; flex-direction: column; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.9);" onclick="this.style.display='none'">
+    <div style="background: white; padding: 25px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); text-align: center;">
+      <h2 style="color: #0f172a; margin-bottom: 15px; font-size: 1.5rem;">Quét Mã Để Tham Gia</h2>
+      <img id="qr-large" src="" style="width: 400px; height: 400px; max-width: 90vw; max-height: 90vw; margin: 0 auto; display: block;" alt="Large QR Code">
+      <p id="qr-url-text" style="color: #334155; margin-top: 15px; font-weight: bold; font-size: 1.4rem;"></p>
+      <p style="color: #64748b; font-size: 0.9rem; margin-top: 10px;">(Nhấn vào bất kỳ đâu để đóng)</p>
     </div>
   </div>
 
-  <div class="client-container animate-fade-in" id="game-view" style="display: none;">
-    <div class="client-header">
-      <h1>Ô Chữ NCKH</h1>
-    </div>
 
-    <div class="glass-panel player-info">
-      <div class="name">👤 <span id="display-name">Player</span></div>
-      <div class="score">⭐ <span id="display-score">0</span></div>
-    </div>
 
-    <div class="glass-panel question-box" id="question-container">
-      <h3 id="question-number">Câu hỏi chưa mở</h3>
-      <p id="question-text">Hãy chờ Host mở câu hỏi tiếp theo nhé!</p>
+  <!-- Logs Modal -->
+  <div id="logs-modal" class="modal-overlay" style="display: none; z-index: 2000;">
+    <div class="result-box glass-panel" style="width: 80%; max-width: 800px; max-height: 80vh; display: flex; flex-direction: column; padding: 30px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="color: var(--accent-cyan); margin: 0; font-size: 1.8rem;">📜 Lịch Sử Trò Chơi</h2>
+        <button id="btn-close-logs" style="background: transparent; border: none; color: white; font-size: 2.5rem; cursor: pointer; line-height: 1;">&times;</button>
+      </div>
+      <div id="logs-container" style="flex: 1; overflow-y: auto; text-align: left; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; font-family: monospace; font-size: 1.1rem; line-height: 1.8;">
+        <!-- Logs go here -->
+      </div>
     </div>
+  </div>
 
-    <div class="glass-panel" style="width: 100%; padding: 20px;" id="answer-form">
-      <input type="text" id="answer-input" class="input-field" placeholder="Nhập đáp án của bạn..." style="margin-bottom: 15px;" disabled>
-      <button class="btn-primary" id="btn-submit" style="width: 100%;" disabled>Gửi Đáp Án</button>
-      <div id="feedback-msg" class="feedback"></div>
+  <div class="host-container">
+    <div class="crossword-section">
+      <h1 style="color: var(--text-primary); font-size: 3rem; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px;">
+        Giải Mã <span style="color: var(--accent-cyan)">Công Nghệ</span>
+      </h1>
+      
+      <div id="crossword-board" class="crossword-board glass-panel" style="padding: 40px;">
+        <!-- Rows will be injected by host.js -->
+      </div>
+      
+      <div id="host-hint-box" class="glass-panel animate-fade-in" style="margin-top: 30px; padding: 20px; width: 100%; border-color: var(--accent-pink); background: rgba(236, 72, 153, 0.05); display: none; align-items: center; gap: 20px;">
+        <div style="flex: 0 0 110px; height: 110px; border: none; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.08); padding: 10px; text-align: center;">
+          <h3 id="host-hint-number" style="color: var(--accent-pink); font-size: 1.5rem; margin: 0; font-weight: bold;">Câu Hỏi</h3>
+          <span id="host-hint-length" style="color: var(--accent-cyan); font-size: 1rem; margin-top: 8px; font-weight: 600;"></span>
+        </div>
+        <div style="flex: 1; display: flex; align-items: center; text-align: left; padding-left: 15px;">
+          <p id="host-hint-text" style="font-size: 1.5rem; line-height: 1.5; font-weight: 500; color: var(--text-primary); white-space: pre-line; margin: 0;"></p>
+        </div>
+      </div>
     </div>
     
-    <div id="vertical-buzzer-area" style="margin-top: 30px;">
-        <button class="btn-primary" id="btn-buzz" style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 100%; font-size: 1.1rem; padding: 15px; box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);">
-          🔔 GIÀNH QUYỀN TRẢ LỜI KHÓA DỌC
+    <div class="leaderboard-section glass-panel">
+      <h2>Top Rankers</h2>
+      <ul class="leaderboard-list" id="leaderboard">
+        <!-- Rendered by JS -->
+      </ul>
+      
+      <div class="admin-controls">
+        <h3 style="color: var(--accent-pink); margin-bottom: 20px; font-size: 1.2rem; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>⚙️</span> Điều khiển Game
+          </div>
+          
+          <div style="position: relative;">
+            <button id="btn-menu" style="background: rgba(255,255,255,0.1); border: none; color: white; border-radius: 6px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.2rem;" title="Menu">
+              ⋮
+            </button>
+            <div id="menu-dropdown" class="glass-panel" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 5px; flex-direction: column; min-width: 180px; padding: 5px 0; z-index: 100;">
+              <button id="btn-view-logs" style="background: transparent; border: none; color: white; padding: 10px 15px; text-align: left; cursor: pointer; font-size: 0.95rem; width: 100%;">📜 Xem Lịch Sử (Logs)</button>
+            </div>
+          </div>
+        </h3>
+        
+        <div style="margin-bottom: 20px;">
+          <label style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 12px; display: block;">Chọn Trò Chơi:</label>
+          <select id="game-selector" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.5); color: white; border: 1px solid var(--accent-cyan); border-radius: 8px; margin-bottom: 10px; font-size: 1rem; cursor: pointer;">
+          </select>
+          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button id="btn-download-sample" style="flex: 1; padding: 8px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10B981; color: #10B981; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s;" onmouseover="this.style.background='rgba(16, 185, 129, 0.4)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.2)'">📥 Tải file mẫu</button>
+            <button id="btn-upload-game" style="flex: 1; padding: 8px; background: rgba(6, 182, 212, 0.2); border: 1px solid #06b6d4; color: #06b6d4; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s;" onmouseover="this.style.background='rgba(6, 182, 212, 0.4)'" onmouseout="this.style.background='rgba(6, 182, 212, 0.2)'">📤 Tải lên Game</button>
+            <input type="file" id="file-upload-game" accept=".json" style="display: none;">
+          </div>
+
+          <label style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 12px; display: block;">Chọn câu hỏi:</label>
+          <div id="question-grid" class="question-grid"></div>
+        </div>
+
+        <div class="control-actions">
+          <button class="btn-primary btn-icon" id="btn-next" style="background: linear-gradient(135deg, #10B981, #059669);">
+            <span>⏭️</span> Câu Kế
+          </button>
+          <button class="btn-primary btn-icon" id="btn-open">
+            <span>👁️</span> Khóa Chốt
+          </button>
+        </div>
+
+        <button class="btn-primary btn-xl" id="btn-reveal" style="background: linear-gradient(135deg, #EC4899, #f43f5e); width: 100%; margin-top: 10px;">
+          🚀 CÔNG BỐ ĐÁP ÁN
         </button>
-    </div>
-    
-  </div>
 
-  <div id="vertical-modal" class="modal-overlay" style="display: none;">
-    <div class="result-box glass-panel" style="border-color: #f59e0b; box-shadow: 0 0 30px rgba(245, 158, 11, 0.3);">
-      <h2 style="color: #f59e0b; font-size: 1.5rem; margin-bottom: 10px;">Nhập Từ Khóa Dọc</h2>
-      <p id="vertical-hint-text" style="font-size: 0.95rem; font-style: italic; color: #bae6fd; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid rgba(0, 240, 255, 0.2);"></p>
-      <p style="margin-bottom: 15px;">Thời gian còn lại: <span id="vertical-timer" style="color: #ef4444; font-weight: bold; font-size: 1.5rem;">30</span> giây!</p>
-      <input type="text" id="vertical-input" class="input-field" placeholder="Đáp án (không dấu)..." style="margin-bottom: 20px;">
-      <button class="btn-primary" id="btn-submit-vertical" style="width: 100%; background: linear-gradient(135deg, #f59e0b, #d97706); padding: 12px;">Đăng Ký Chốt Hạ</button>
+        <div class="danger-zone" style="margin-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 15px;">
+          <button class="btn-danger" id="btn-reset">
+            ⚠️ Khởi tạo lại toàn bộ từ đầu
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div id="result-modal" class="modal-overlay" style="display: none;">
-    <div class="result-box glass-panel">
-      <h2 id="result-title">Kết quả</h2>
-      <p id="result-message" style="margin-bottom: 20px; font-size: 1.2rem;"></p>
-      <button class="btn-primary" id="btn-close-modal" style="width: 100%;">Chơi tiếp</button>
+  <div id="host-vertical-modal" class="modal-overlay" style="display: none;">
+    <div class="result-box glass-panel" style="border-color: #f59e0b; width: 500px; max-width: 90%;">
+      <h2 style="color: #f59e0b; font-size: 1.8rem; margin-bottom: 15px;">🚨 Có Người Chốt Hạ!</h2>
+      <p id="host-vertical-msg" style="font-size: 1.2rem; margin-bottom: 30px;"></p>
+      <div style="display: flex; gap: 15px;">
+        <button class="btn-primary btn-xl" id="btn-vertical-reveal" style="flex: 1; width: 100%; border: none; display: block;">🚀 BẬT MÍ - BÍ MẬT 🚀</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="host-alert-modal" class="modal-overlay" style="display: none; z-index: 2000;">
+    <div id="host-alert-box" class="result-box glass-panel lose" style="width: 500px; max-width: 90%;">
+      <h2 id="host-alert-title">❌ RẤT TIẾC ❌</h2>
+      <p id="host-alert-msg" style="font-size: 1.2rem; margin-bottom: 30px; line-height: 1.5; color: #fff;"></p>
+      <div style="display: flex; justify-content: center;">
+         <button class="btn-danger" id="btn-close-alert" style="width: 100%; padding: 12px; font-size: 1.1rem; text-transform: uppercase;">ĐÓNG LẠI</button>
+      </div>
     </div>
   </div>
 
   <script src="/js/sounds.js?v=6"></script>
-  <script src="/js/client.js?v=2"></script>
+  <script src="/js/host.js?v=8"></script>
+  <script>
+    // Tự động tạo QR code theo địa chỉ IP hiện tại
+    window.addEventListener('DOMContentLoaded', () => {
+      const currentUrl = window.location.protocol + '//' + window.location.host + '/player.html';
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(currentUrl)}&margin=10`;
+      
+      document.getElementById('qr-thumbnail').src = qrApiUrl;
+      document.getElementById('qr-large').src = qrApiUrl;
+      document.getElementById('qr-url-text').innerText = currentUrl;
+    });
+  </script>
 </body>
 </html>
