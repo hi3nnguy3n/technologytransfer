@@ -16,16 +16,16 @@
   <!-- Container chứa mã QR nhỏ -->
   <div id="qr-container" style="position: absolute; top: 20px; left: 20px; cursor: pointer; text-align: center; z-index: 100;" onclick="document.getElementById('qr-modal').style.display='flex'">
     <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 5px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">Quét để tham gia</p>
-    <div id="qr-thumbnail" style="width: 100px; height: 100px; padding: 5px; background: white; border-radius: 8px; border: 2px solid var(--accent-cyan); box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3); transition: transform 0.2s;"></div>
+    <div id="qr-thumbnail" style="width: 100px; height: 100px; border-radius: 8px; border: 2px solid var(--accent-cyan); box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3); transition: transform 0.2s; overflow: hidden; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3);"></div>
   </div>
 
   <!-- Modal chứa mã QR phóng to -->
   <div id="qr-modal" class="modal-overlay" style="display: none; z-index: 3000; flex-direction: column; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.9);" onclick="this.style.display='none'">
-    <div style="background: white; padding: 25px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); text-align: center;">
-      <h2 style="color: #0f172a; margin-bottom: 15px; font-size: 1.5rem;">Quét Mã Để Tham Gia</h2>
-      <div id="qr-large" style="margin: 0 auto; display: inline-block;"></div>
-      <p id="qr-url-text" style="color: #334155; margin-top: 15px; font-weight: bold; font-size: 1.4rem;"></p>
-      <p style="color: #64748b; font-size: 0.9rem; margin-top: 10px;">(Nhấn vào bất kỳ đâu để đóng)</p>
+    <div style="background: var(--bg-color-main); padding: 25px; border-radius: 16px; border: 1px solid var(--accent-cyan); box-shadow: 0 0 30px rgba(0, 240, 255, 0.3); text-align: center;">
+      <h2 style="color: var(--text-primary); margin-bottom: 15px; font-size: 1.5rem;">Quét Mã Để Tham Gia</h2>
+      <div id="qr-large" style="width: 400px; height: 400px; max-width: 80vw; max-height: 80vw; margin: 0 auto; display: flex; align-items: center; justify-content: center; background: white; padding: 15px; border-radius: 12px;"></div>
+      <p id="qr-url-text" style="color: var(--accent-cyan); margin-top: 15px; font-weight: bold; font-size: 1.4rem;"></p>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 10px;">(Nhấn vào bất kỳ đâu để đóng)</p>
     </div>
   </div>
 
@@ -152,19 +152,19 @@
       const roomId = urlParams.get('room') || 'default';
       const currentUrl = window.location.protocol + '//' + window.location.host + '/player.html?room=' + roomId;
       
-      // Clear and generate thumbnail
+      // Clear and generate thumbnail (Cyan on transparent for the small one)
       const thumbContainer = document.getElementById('qr-thumbnail');
       thumbContainer.innerHTML = "";
       new QRCode(thumbContainer, {
         text: currentUrl,
-        width: 100,
-        height: 100,
-        colorDark: "#000000",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.H
+        width: 90,
+        height: 90,
+        colorDark: "#00F0FF",
+        colorLight: "rgba(0,0,0,0)",
+        correctLevel: QRCode.CorrectLevel.M
       });
 
-      // Clear and generate large QR
+      // Clear and generate large QR (Black on White for maximum readability when zoomed)
       const largeContainer = document.getElementById('qr-large');
       largeContainer.innerHTML = "";
       new QRCode(largeContainer, {
