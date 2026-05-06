@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crossword Player</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+  <div class="client-container animate-fade-in" id="login-view">
+    <div class="client-header">
+      <h1>Workshop NCKH</h1>
+      <p style="color: var(--text-secondary)">Sẵn sàng giải mã từ khóa?</p>
+    </div>
+    
+    <div class="glass-panel" style="width: 100%; padding: 30px;">
+      <h2 style="margin-bottom: 20px; text-align: center;">Đăng ký người chơi</h2>
+      <input type="text" id="player-name" class="input-field" placeholder="Nhập tên/nickname của bạn..." style="margin-bottom: 20px;">
+      <button class="btn-primary" id="btn-join" style="width: 100%;">Tham gia Game</button>
+    </div>
+  </div>
+
+  <div class="client-container animate-fade-in" id="game-view" style="display: none;">
+    <div class="client-header">
+      <h1>Ô Chữ NCKH</h1>
+    </div>
+
+    <div class="glass-panel player-info">
+      <div class="name">👤 <span id="display-name">Player</span></div>
+      <div class="score">⭐ <span id="display-score">0</span></div>
+    </div>
+
+    <div class="glass-panel question-box" id="question-container">
+      <h3 id="question-number">Câu hỏi chưa mở</h3>
+      <p id="question-text">Hãy chờ Host mở câu hỏi tiếp theo nhé!</p>
+    </div>
+
+    <div class="glass-panel" style="width: 100%; padding: 20px;" id="answer-form">
+      <input type="text" id="answer-input" class="input-field" placeholder="Nhập đáp án của bạn..." style="margin-bottom: 15px;" disabled>
+      <button class="btn-primary" id="btn-submit" style="width: 100%;" disabled>Gửi Đáp Án</button>
+      <div id="feedback-msg" class="feedback"></div>
+    </div>
+    
+    <div id="vertical-buzzer-area" style="margin-top: 30px;">
+        <button class="btn-primary" id="btn-buzz" style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 100%; font-size: 1.1rem; padding: 15px; box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);">
+          🔔 GIÀNH QUYỀN TRẢ LỜI KHÓA DỌC
+        </button>
+    </div>
+    
+  </div>
+
+  <div id="vertical-modal" class="modal-overlay" style="display: none;">
+    <div class="result-box glass-panel" style="border-color: #f59e0b; box-shadow: 0 0 30px rgba(245, 158, 11, 0.3);">
+      <h2 style="color: #f59e0b; font-size: 1.5rem; margin-bottom: 10px;">Nhập Từ Khóa Dọc</h2>
+      <p id="vertical-hint-text" style="font-size: 0.95rem; font-style: italic; color: #bae6fd; margin-bottom: 15px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid rgba(0, 240, 255, 0.2);"></p>
+      <p style="margin-bottom: 15px;">Thời gian còn lại: <span id="vertical-timer" style="color: #ef4444; font-weight: bold; font-size: 1.5rem;">30</span> giây!</p>
+      <input type="text" id="vertical-input" class="input-field" placeholder="Đáp án (không dấu)..." style="margin-bottom: 20px;">
+      <button class="btn-primary" id="btn-submit-vertical" style="width: 100%; background: linear-gradient(135deg, #f59e0b, #d97706); padding: 12px;">Đăng Ký Chốt Hạ</button>
+    </div>
+  </div>
+
+  <div id="result-modal" class="modal-overlay" style="display: none;">
+    <div class="result-box glass-panel">
+      <h2 id="result-title">Kết quả</h2>
+      <p id="result-message" style="margin-bottom: 20px; font-size: 1.2rem;"></p>
+      <button class="btn-primary" id="btn-close-modal" style="width: 100%;">Chơi tiếp</button>
+    </div>
+  </div>
+
+  <script src="/js/sounds.js?v=6"></script>
+  <script src="/js/client.js?v=2"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "id": "technology_transfer",
+  "name": "Technology Transfer",
+  "verticalAnswerValue": "CHUYENGIAO",
+  "verticalAnswerHint": "Quá trình bàn giao, ứng dụng một công nghệ/nghiên cứu từ nguồn sáng lập sang đơn vị có nhu cầu tiếp nhận.",
+  "words": [
+    { "answer": "SCOPUS", "question": "Largest citation database of peer-reviewed literature.\n(Cơ sở dữ liệu trích dẫn khoa học lớn nhất thế giới).", "offset": 7, "verticalIndex": 1 },
+    { "answer": "ARCHITECTURE", "question": "The fundamental structure of a software system.\n(Cấu trúc cơ bản của một hệ thống phần mềm).", "offset": 5, "verticalIndex": 3 },
+    { "answer": "PUBLISH", "question": "The process of making a research paper available to the public.\n(Quá trình công bố bài báo khoa học ra công chúng).", "offset": 7, "verticalIndex": 1 },
+    { "answer": "ANALYSIS", "question": "The phase of inspecting data to discover useful information.\n(Giai đoạn kiểm tra dữ liệu để tìm ra các thông tin hữu ích).", "offset": 4, "verticalIndex": 4 },
+    { "answer": "REVIEWER", "question": "An expert who evaluates the quality of a manuscript.\n(Chuyên gia đánh giá chất lượng của một bản thảo bài báo).", "offset": 7, "verticalIndex": 1 },
+    { "answer": "INNOVATION", "question": "The implementation of a new or improved product/process.\n(Việc triển khai một sản phẩm hoặc quy trình mới/cải tiến).", "offset": 7, "verticalIndex": 1 },
+    { "answer": "ALGORITHM", "question": "A finite sequence of instructions to solve a problem.\n(Một chuỗi các chỉ dẫn hữu hạn để giải quyết một bài toán).", "offset": 6, "verticalIndex": 2 },
+    { "answer": "CITATION", "question": "A reference to a published or unpublished source.\n(Một trích dẫn đến một nguồn tài liệu đã hoặc chưa công bố).", "offset": 7, "verticalIndex": 1 },
+    { "answer": "DATASET", "question": "A collection of related sets of information.\n(Một tập hợp các bộ thông tin có liên quan đến nhau).", "offset": 7, "verticalIndex": 1 },
+    { "answer": "PROTOCOL", "question": "A system of rules that allow entities to transmit information.\n(Hệ thống các quy tắc cho phép các đối tượng truyền tải thông tin).", "offset": 6, "verticalIndex": 2 }
+  ]
+}
