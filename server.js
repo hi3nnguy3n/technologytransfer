@@ -6,7 +6,16 @@ const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  pingTimeout: 30000,
+  pingInterval: 10000,
+  connectTimeout: 20000,
+  allowEIO3: true,
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 const PORT = 3000;
 
@@ -32,82 +41,83 @@ app.get('/api/sample', (req, res) => {
 });
 
 
-// In-memory Game State
-const state = {
-  players: {}, // socketId -> { name, score }
-  revealedWords: {}, // index -> true (which horizontal words are revealed)
-  activeQuestion: null, // index of the active question (0-8)
-  leaderboard: [],
-  currentAnswers: {}, // socketId -> { answer, time }
-  verticalBuzzer: {
-    locked: false,
-    bySocketId: null,
-    playerName: null,
-    timeoutId: null,
-    answerSubmitted: null
-  }
-};
+const rooms = {};
 
-const gameLogs = [];
-function addLog(msg) {
+function getRoom(roomId) {
+  if (!roomId) roomId = 'default';
+  if (!rooms[roomId]) {
+    rooms[roomId] = {
+      state: {
+        players: {}, // socketId -> { name, score }
+        revealedWords: {}, // index -> true (which horizontal words are revealed)
+        activeQuestion: null, // index of the active question (0-8)
+        leaderboard: [],
+        currentAnswers: {}, // socketId -> { answer, time }
+        verticalBuzzer: {
+          locked: false,
+          bySocketId: null,
+          playerName: null,
+          timeoutId: null,
+          answerSubmitted: null
+        },
+        activeQuestionStartTime: 0
+      },
+      gameLogs: [],
+      currentGameId: Object.keys(games)[0] || 'default'
+    };
+  }
+  return rooms[roomId];
+}
+
+function addLog(roomId, msg) {
+  const room = getRoom(roomId);
   const time = new Date().toLocaleTimeString('vi-VN');
   const logStr = `[${time}] ${msg}`;
-  gameLogs.push(logStr);
-  io.emit('new_log', logStr);
+  room.gameLogs.push(logStr);
+  io.to(roomId).emit('new_log', logStr);
 }
 
-
-
-let games = {};
-try {
-  const dataDir = path.join(__dirname, 'data');
-  if (fs.existsSync(dataDir)) {
-    const files = fs.readdirSync(dataDir);
-    for (const f of files) {
-      if (f.endsWith('.json')) {
-        const g = JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf-8'));
-        games[g.id] = g;
-      }
-    }
-  }
-} catch (e) {
-  console.error("Error loading games:", e);
-}
-
-if (Object.keys(games).length === 0) {
-  games['default'] = { id: 'default', name: 'Mặc định', verticalAnswerValue: '', verticalAnswerHint: '', words: [] };
-}
-
-let currentGameId = Object.keys(games)[0];
-function getGame() {
-  return games[currentGameId] || Object.values(games)[0];
-}
-
-
-let activeQuestionStartTime = 0;
-
-function updateLeaderboard() {
-  state.leaderboard = Object.values(state.players).sort((a, b) => b.score - a.score);
-  io.emit('update_leaderboard', state.leaderboard);
+function updateLeaderboard(roomId) {
+  const room = getRoom(roomId);
+  room.state.leaderboard = Object.values(room.state.players).sort((a, b) => b.score - a.score);
+  io.to(roomId).emit('update_leaderboard', room.state.leaderboard);
 }
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  socket.emit('init_state', {
-    games: Object.values(games).map(g => ({id: g.id, name: g.name})),
-    currentGameId: currentGameId,
-    activeQuestion: state.activeQuestion,
-    questionText: state.activeQuestion !== null ? getGame().words[state.activeQuestion].question : "",
-    revealedWords: state.revealedWords,
-    leaderboard: state.leaderboard,
-    crosswordLayout: getGame().words.map((w, i) => ({ length: w.answer.length, index: i, offset: w.offset, verticalIndex: w.verticalIndex })),
-    verticalBuzzerLocked: state.verticalBuzzer.locked,
-    buzzedPlayer: state.verticalBuzzer.playerName,
-    gameLogs: gameLogs
+  socket.on('join_room', (data) => {
+    const roomId = data.roomId || 'default';
+    socket.roomId = roomId;
+    socket.join(roomId);
+
+    const room = getRoom(roomId);
+    const state = room.state;
+
+    socket.emit('init_state', {
+      games: Object.values(games).map(g => ({id: g.id, name: g.name})),
+      currentGameId: room.currentGameId,
+      activeQuestion: state.activeQuestion,
+      questionText: state.activeQuestion !== null ? (games[room.currentGameId] || Object.values(games)[0]).words[state.activeQuestion].question : "",
+      revealedWords: state.revealedWords,
+      leaderboard: state.leaderboard,
+      crosswordLayout: (games[room.currentGameId] || Object.values(games)[0]).words.map((w, i) => ({ length: w.answer.length, index: i, offset: w.offset, verticalIndex: w.verticalIndex })),
+      verticalBuzzerLocked: state.verticalBuzzer.locked,
+      buzzedPlayer: state.verticalBuzzer.playerName,
+      gameLogs: room.gameLogs
+    });
   });
 
   socket.on('join_game', (data) => {
+    const roomId = data.roomId || socket.roomId || 'default';
+    if (!socket.roomId) {
+        socket.roomId = roomId;
+        socket.join(roomId);
+    }
+    
+    const room = getRoom(roomId);
+    const state = room.state;
+
     let name = '';
     let playerId = socket.id;
 
@@ -123,16 +133,20 @@ io.on('connection', (socket) => {
 
     if (!state.players[playerId]) {
       state.players[playerId] = { name: name, score: 0 };
-      addLog(`👤 Người chơi "${name}" đã tham gia.`);
+      addLog(roomId, `👤 Người chơi "${name}" đã tham gia.`);
     } else {
       state.players[playerId].name = name;
     }
 
-    updateLeaderboard();
+    updateLeaderboard(roomId);
     socket.emit('joined', { name: state.players[playerId].name, score: state.players[playerId].score });
   });
 
   socket.on('submit_answer', (answer) => {
+    const roomId = socket.roomId || 'default';
+    const room = getRoom(roomId);
+    const state = room.state;
+
     if (state.activeQuestion === null) {
       socket.emit('answer_feedback', { success: false, message: "Chưa có câu hỏi nào được mở." });
       return;
@@ -148,13 +162,17 @@ io.on('connection', (socket) => {
       time: Date.now()
     };
     const pName = state.players[socket.playerId] ? state.players[socket.playerId].name : "Ẩn danh";
-    addLog(`✍️ ${pName} đã nộp đáp án: "${answer.trim().toUpperCase()}"`);
+    addLog(roomId, `✍️ ${pName} đã nộp đáp án: "${answer.trim().toUpperCase()}"`);
     
     socket.emit('answer_received', { message: 'Đã lưu đáp án! Cùng nín thở chờ kết quả nhé... 🫣' });
   });
   
   // Vertical Buzzer Logic
   socket.on('buzz_vertical', () => {
+    const roomId = socket.roomId || 'default';
+    const room = getRoom(roomId);
+    const state = room.state;
+
     if (state.verticalBuzzer.locked) {
       socket.emit('answer_feedback', { success: false, message: "Người khác đã giành quyền!" });
       return;
@@ -164,24 +182,27 @@ io.on('connection', (socket) => {
     state.verticalBuzzer.bySocketId = socket.playerId;
     state.verticalBuzzer.playerName = state.players[socket.playerId] ? state.players[socket.playerId].name : "Ẩn danh";
     state.verticalBuzzer.answerSubmitted = null;
-    state.verticalBuzzer.answerSubmitted = null;
 
-    addLog(`🔔 ${state.verticalBuzzer.playerName} đã bấm chuông giành quyền trả lời từ khóa dọc!`);
-    io.emit('buzzer_locked', { playerName: state.verticalBuzzer.playerName });
-    socket.emit('buzzer_granted', { timeout: 30, hint: getGame().verticalAnswerHint });
+    addLog(roomId, `🔔 ${state.verticalBuzzer.playerName} đã bấm chuông giành quyền trả lời từ khóa dọc!`);
+    io.to(roomId).emit('buzzer_locked', { playerName: state.verticalBuzzer.playerName });
+    socket.emit('buzzer_granted', { timeout: 30, hint: (games[room.currentGameId] || Object.values(games)[0]).verticalAnswerHint });
 
     state.verticalBuzzer.timeoutId = setTimeout(() => {
       if (state.verticalBuzzer.bySocketId === socket.playerId && !state.verticalBuzzer.answerSubmitted) {
-         io.emit('answer_feedback', { success: false, message: `Hết 30 giây! ${state.verticalBuzzer.playerName} chưa kịp trả lời.` });
+         io.to(roomId).emit('answer_feedback', { success: false, message: `Hết 30 giây! ${state.verticalBuzzer.playerName} chưa kịp trả lời.` });
          state.verticalBuzzer.locked = false;
          state.verticalBuzzer.bySocketId = null;
          state.verticalBuzzer.playerName = null;
-         io.emit('buzzer_unlocked');
+         io.to(roomId).emit('buzzer_unlocked');
       }
     }, 30000);
   });
 
   socket.on('submit_vertical', (answer) => {
+     const roomId = socket.roomId || 'default';
+     const room = getRoom(roomId);
+     const state = room.state;
+
      if (state.verticalBuzzer.bySocketId !== socket.playerId) return;
      
      if (state.verticalBuzzer.timeoutId) {
@@ -189,27 +210,36 @@ io.on('connection', (socket) => {
      }
      
      state.verticalBuzzer.answerSubmitted = answer.trim().toUpperCase();
-     addLog(`🎯 ${state.verticalBuzzer.playerName} chốt hạ từ khóa dọc: "${answer.trim().toUpperCase()}"`);
+     addLog(roomId, `🎯 ${state.verticalBuzzer.playerName} chốt hạ từ khóa dọc: "${answer.trim().toUpperCase()}"`);
      socket.emit('answer_received', { message: "Đã nộp bài! Đang chờ Host phán quyết..." });
      
-     io.emit('host_vertical_submission', { 
+     io.to(roomId).emit('host_vertical_submission', { 
        playerName: state.verticalBuzzer.playerName, 
        answer: state.verticalBuzzer.answerSubmitted 
      });
   });
 
   socket.on('admin_open_question', (index) => {
+    const roomId = socket.roomId || 'default';
+    const room = getRoom(roomId);
+    const state = room.state;
+
     state.activeQuestion = index;
     state.currentAnswers = {}; // reset answers for the new question
-    activeQuestionStartTime = Date.now();
-    addLog(`📖 Host đã mở Câu ${index + 1}`);
-    io.emit('new_question', { index, text: getGame().words[index].question });
+    state.activeQuestionStartTime = Date.now();
+    addLog(roomId, `📖 Host đã mở Câu ${index + 1}`);
+    io.to(roomId).emit('new_question', { index, text: (games[room.currentGameId] || Object.values(games)[0]).words[index].question });
   });
 
   socket.on('admin_reveal_word', (index) => {
+    const roomId = socket.roomId || 'default';
+    const room = getRoom(roomId);
+    const state = room.state;
+    const currentGame = games[room.currentGameId] || Object.values(games)[0];
+
     if (!state.revealedWords[index]) {
       state.revealedWords[index] = true;
-      const correctAnswer = getGame().words[index].answer.toUpperCase();
+      const correctAnswer = currentGame.words[index].answer.toUpperCase();
       let fastestPlayer = null;
       let fastestTime = Infinity;
 
@@ -217,7 +247,7 @@ io.on('connection', (socket) => {
         Object.entries(state.currentAnswers).forEach(([playerId, data]) => {
           if (data.answer === correctAnswer) {
             // Correct
-            const timeTaken = data.time - activeQuestionStartTime;
+            const timeTaken = data.time - state.activeQuestionStartTime;
             if (timeTaken < fastestTime) {
                 fastestTime = timeTaken;
                 fastestPlayer = state.players[playerId] ? state.players[playerId].name : "Ẩn danh";
@@ -240,61 +270,74 @@ io.on('connection', (socket) => {
 
       state.activeQuestion = null; // Close question
       state.currentAnswers = {};
-      updateLeaderboard();
-      addLog(`🔓 Host công bố đáp án Câu ${index + 1}: ${correctAnswer} (Nhanh nhất: ${fastestPlayer || 'Không có ai'})`);
-      io.emit('word_revealed', { index, word: getGame().words[index].answer, winner: fastestPlayer || "Quá chậm hoặc Không ai đúng" });
+      updateLeaderboard(roomId);
+      addLog(roomId, `🔓 Host công bố đáp án Câu ${index + 1}: ${correctAnswer} (Nhanh nhất: ${fastestPlayer || 'Không có ai'})`);
+      io.to(roomId).emit('word_revealed', { index, word: currentGame.words[index].answer, winner: fastestPlayer || "Quá chậm hoặc Không ai đúng" });
     }
   });
 
   socket.on('admin_resolve_vertical', () => {
-      const isCorrect = (state.verticalBuzzer.answerSubmitted === getGame().verticalAnswerValue);
+      const roomId = socket.roomId || 'default';
+      const room = getRoom(roomId);
+      const state = room.state;
+      const currentGame = games[room.currentGameId] || Object.values(games)[0];
+
+      const isCorrect = (state.verticalBuzzer.answerSubmitted === currentGame.verticalAnswerValue);
       if (isCorrect) {
-          addLog(`🏆 XUẤT SẮC! ${state.verticalBuzzer.playerName} đã trả lời ĐÚNG từ khóa dọc!`);
-          io.emit('vertical_winner', {
+          addLog(roomId, `🏆 XUẤT SẮC! ${state.verticalBuzzer.playerName} đã trả lời ĐÚNG từ khóa dọc!`);
+          io.to(roomId).emit('vertical_winner', {
              playerName: state.verticalBuzzer.playerName,
              answer: state.verticalBuzzer.answerSubmitted,
-             correctWord: getGame().verticalAnswerValue
+             correctWord: currentGame.verticalAnswerValue
           });
       } else {
-          addLog(`❌ Rất tiếc! ${state.verticalBuzzer.playerName} đã trả lời SAI từ khóa dọc.`);
-          io.emit('vertical_wrong', { playerName: state.verticalBuzzer.playerName });
-          io.emit('answer_feedback', { success: false, message: `Oài! Khán giả ${state.verticalBuzzer.playerName} chốt hạ sai rồi. Chuông giành quyền đã mở lại nhé!` });
+          addLog(roomId, `❌ Rất tiếc! ${state.verticalBuzzer.playerName} đã trả lời SAI từ khóa dọc.`);
+          io.to(roomId).emit('vertical_wrong', { playerName: state.verticalBuzzer.playerName });
+          io.to(roomId).emit('answer_feedback', { success: false, message: `Oài! Khán giả ${state.verticalBuzzer.playerName} chốt hạ sai rồi. Chuông giành quyền đã mở lại nhé!` });
           state.verticalBuzzer.locked = false;
           state.verticalBuzzer.bySocketId = null;
           state.verticalBuzzer.playerName = null;
           state.verticalBuzzer.answerSubmitted = null;
-          io.emit('buzzer_unlocked');
+          io.to(roomId).emit('buzzer_unlocked');
       }
   });
 
   socket.on('admin_select_game', (gameId) => {
+    const roomId = socket.roomId || 'default';
+    const room = getRoom(roomId);
+
     if (games[gameId]) {
-      currentGameId = gameId;
-      state.players = {};
-      state.revealedWords = {};
-      state.activeQuestion = null;
-      state.leaderboard = [];
-      state.currentAnswers = {};
-      state.verticalBuzzer = { locked: false, bySocketId: null, playerName: null, timeoutId: null, answerSubmitted: null };
-      updateLeaderboard();
-      addLog(`🔄 Đã chuyển sang trò chơi mới: ${games[gameId].name}`);
-      io.emit('game_reset', { newLayout: getGame().words.map((w, i) => ({ length: w.answer.length, index: i, offset: w.offset, verticalIndex: w.verticalIndex })) });
-      io.emit('init_state', {
+      room.currentGameId = gameId;
+      room.state.players = {};
+      room.state.revealedWords = {};
+      room.state.activeQuestion = null;
+      room.state.leaderboard = [];
+      room.state.currentAnswers = {};
+      room.state.verticalBuzzer = { locked: false, bySocketId: null, playerName: null, timeoutId: null, answerSubmitted: null };
+      updateLeaderboard(roomId);
+      addLog(roomId, `🔄 Đã chuyển sang trò chơi mới: ${games[gameId].name}`);
+      
+      const currentGame = games[room.currentGameId];
+      io.to(roomId).emit('game_reset', { newLayout: currentGame.words.map((w, i) => ({ length: w.answer.length, index: i, offset: w.offset, verticalIndex: w.verticalIndex })) });
+      io.to(roomId).emit('init_state', {
         games: Object.values(games).map(g => ({id: g.id, name: g.name})),
-        currentGameId: currentGameId,
-        activeQuestion: state.activeQuestion,
+        currentGameId: room.currentGameId,
+        activeQuestion: room.state.activeQuestion,
         questionText: "",
-        revealedWords: state.revealedWords,
-        leaderboard: state.leaderboard,
-        crosswordLayout: getGame().words.map((w, i) => ({ length: w.answer.length, index: i, offset: w.offset, verticalIndex: w.verticalIndex })),
-        verticalBuzzerLocked: state.verticalBuzzer.locked,
-        buzzedPlayer: state.verticalBuzzer.playerName,
-        gameLogs: gameLogs
+        revealedWords: room.state.revealedWords,
+        leaderboard: room.state.leaderboard,
+        crosswordLayout: currentGame.words.map((w, i) => ({ length: w.answer.length, index: i, offset: w.offset, verticalIndex: w.verticalIndex })),
+        verticalBuzzerLocked: room.state.verticalBuzzer.locked,
+        buzzedPlayer: room.state.verticalBuzzer.playerName,
+        gameLogs: room.gameLogs
       });
     }
   });
 
   socket.on('admin_upload_game', (gameData) => {
+    const roomId = socket.roomId || 'default';
+    const room = getRoom(roomId);
+
     try {
       const dataDir = path.join(__dirname, 'data');
       if (!fs.existsSync(dataDir)) {
@@ -309,30 +352,32 @@ io.on('connection', (socket) => {
       fs.writeFileSync(filePath, JSON.stringify(gameData, null, 2));
       
       games[safeId] = gameData;
-      currentGameId = safeId;
+      room.currentGameId = safeId;
       
       // Reset state
-      state.players = {};
-      state.revealedWords = {};
-      state.activeQuestion = null;
-      state.leaderboard = [];
-      state.currentAnswers = {};
-      state.verticalBuzzer = { locked: false, bySocketId: null, playerName: null, timeoutId: null, answerSubmitted: null };
-      updateLeaderboard();
+      room.state.players = {};
+      room.state.revealedWords = {};
+      room.state.activeQuestion = null;
+      room.state.leaderboard = [];
+      room.state.currentAnswers = {};
+      room.state.verticalBuzzer = { locked: false, bySocketId: null, playerName: null, timeoutId: null, answerSubmitted: null };
+      updateLeaderboard(roomId);
       
-      addLog(`📤 Host đã tải lên và chuyển sang trò chơi mới: ${gameData.name}`);
-      io.emit('game_reset', { newLayout: getGame().words.map((w, i) => ({ length: w.answer.length, index: i, offset: w.offset, verticalIndex: w.verticalIndex })) });
-      io.emit('init_state', {
+      addLog(roomId, `📤 Host đã tải lên và chuyển sang trò chơi mới: ${gameData.name}`);
+      
+      const currentGame = games[room.currentGameId];
+      io.to(roomId).emit('game_reset', { newLayout: currentGame.words.map((w, i) => ({ length: w.answer.length, index: i, offset: w.offset, verticalIndex: w.verticalIndex })) });
+      io.to(roomId).emit('init_state', {
         games: Object.values(games).map(g => ({id: g.id, name: g.name})),
-        currentGameId: currentGameId,
-        activeQuestion: state.activeQuestion,
+        currentGameId: room.currentGameId,
+        activeQuestion: room.state.activeQuestion,
         questionText: "",
-        revealedWords: state.revealedWords,
-        leaderboard: state.leaderboard,
-        crosswordLayout: getGame().words.map((w, i) => ({ length: w.answer.length, index: i, offset: w.offset, verticalIndex: w.verticalIndex })),
-        verticalBuzzerLocked: state.verticalBuzzer.locked,
-        buzzedPlayer: state.verticalBuzzer.playerName,
-        gameLogs: gameLogs
+        revealedWords: room.state.revealedWords,
+        leaderboard: room.state.leaderboard,
+        crosswordLayout: currentGame.words.map((w, i) => ({ length: w.answer.length, index: i, offset: w.offset, verticalIndex: w.verticalIndex })),
+        verticalBuzzerLocked: room.state.verticalBuzzer.locked,
+        buzzedPlayer: room.state.verticalBuzzer.playerName,
+        gameLogs: room.gameLogs
       });
     } catch (e) {
       console.error("Error uploading game:", e);
@@ -340,21 +385,25 @@ io.on('connection', (socket) => {
   });
 
   socket.on('admin_reset_game', () => {
-    state.players = {};
-    state.revealedWords = {};
-    state.activeQuestion = null;
-    state.leaderboard = [];
-    state.currentAnswers = {};
-    state.verticalBuzzer = { locked: false, bySocketId: null, playerName: null, timeoutId: null, answerSubmitted: null };
-    updateLeaderboard();
-    addLog(`🔄 Trò chơi đã được reset (Bắt đầu lại từ đầu)`);
-    io.emit('game_reset');
+    const roomId = socket.roomId || 'default';
+    const room = getRoom(roomId);
+
+    room.state.players = {};
+    room.state.revealedWords = {};
+    room.state.activeQuestion = null;
+    room.state.leaderboard = [];
+    room.state.currentAnswers = {};
+    room.state.verticalBuzzer = { locked: false, bySocketId: null, playerName: null, timeoutId: null, answerSubmitted: null };
+    updateLeaderboard(roomId);
+    addLog(roomId, `🔄 Trò chơi đã được reset (Bắt đầu lại từ đầu)`);
+    io.to(roomId).emit('game_reset');
   });
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
 });
+
 
 const os = require('os');
 function getLocalIpAddress() {

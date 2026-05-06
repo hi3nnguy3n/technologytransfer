@@ -54,6 +54,10 @@ let currentActiveQuestion = null;
 let cwLayout = [];
 
 
+// Get roomId from URL
+const urlParams = new URLSearchParams(window.location.search);
+const roomId = urlParams.get('room') || 'default';
+
 let playerId = localStorage.getItem('playerId');
 if (!playerId) {
   playerId = Math.random().toString(36).substring(2, 15);
@@ -64,7 +68,7 @@ socket.on('connect', () => {
   const savedName = localStorage.getItem('playerName');
   if (savedName) {
     inputName.value = savedName;
-    socket.emit('join_game', { playerId, name: savedName });
+    socket.emit('join_game', { roomId, playerId, name: savedName });
   }
 });
 
@@ -75,7 +79,7 @@ btnJoin.addEventListener('click', () => {
     return;
   }
   localStorage.setItem('playerName', name);
-  socket.emit('join_game', { playerId, name });
+  socket.emit('join_game', { roomId, playerId, name });
 });
 
 

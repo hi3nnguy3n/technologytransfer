@@ -1,5 +1,14 @@
 const socket = io();
 
+// Get roomId from URL
+const urlParams = new URLSearchParams(window.location.search);
+const roomId = urlParams.get('room') || 'default';
+
+socket.on('connect', () => {
+    socket.emit('join_room', { roomId });
+});
+
+
 // DOM
 const boardEl = document.getElementById('crossword-board');
 const leaderboardEl = document.getElementById('leaderboard');
